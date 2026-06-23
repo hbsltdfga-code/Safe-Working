@@ -5,4 +5,4 @@ pages_build_output_dir = "."
 [[d1_databases]]
 binding = "DB"
 database_name = "hbs_heat_stress"
-database_id = "a111a6c2-df56-4b12-a9ca-4f28837591a6"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"

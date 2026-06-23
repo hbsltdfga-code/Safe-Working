@@ -1,4 +1,4 @@
-const RECIPIENTS = [
+const DEFAULT_RECIPIENTS = [
   'lucy.coppage@hockley-ltd.com',
   'eward.richards@hockley-ltd.com',
   'peter.taylor@hockley-ltd.com'
@@ -15,9 +15,21 @@ function esc(v) {
   return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
 }
 
+function recordReference() {
+  const d = new Date();
+  const stamp = d.toISOString().slice(0,10).replaceAll('-', '');
+  const rand = Math.random().toString(36).slice(2, 7).toUpperCase();
+  return `HBS-${stamp}-${rand}`;
+}
+
+function recipients(env) {
+  const raw = env.EMAIL_TO || DEFAULT_RECIPIENTS.join(',');
+  return raw.split(',').map(x => x.trim()).filter(Boolean);
+}
+
 function buildEmailHtml(data, recordId) {
   const rows = [
-    ['Record ID', recordId],
+    ['Record Reference', recordId],
     ['Site', data.siteName],
     ['Address', data.siteAddress],
     ['Plant room', data.plantRoomLocation],
@@ -44,7 +56,9 @@ function buildEmailHtml(data, recordId) {
 
 async function sendEmail(env, data, recordId) {
   if (!env.RESEND_API_KEY) return { skipped: true, reason: 'RESEND_API_KEY not configured' };
-  const subject = `HBS Heat Stress Assessment - ${data.siteName || 'Site'} - ${data.riskLevel || 'Risk'}`;
+  if (!env.FROM_EMAIL) return { skipped: true, reason: 'FROM_EMAIL not configured' };
+
+  const subject = `HBS Heat Stress Assessment ${recordId} - ${data.siteName || 'Site'} - ${data.riskLevel || 'Risk'}`;
   const html = buildEmailHtml(data, recordId);
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -53,14 +67,14 @@ async function sendEmail(env, data, recordId) {
       'content-type': 'application/json'
     },
     body: JSON.stringify({
-      from: env.FROM_EMAIL || 'HBS Compliance <onboarding@resend.dev>',
-      to: RECIPIENTS,
+      from: env.FROM_EMAIL,
+      to: recipients(env),
       subject,
       html
     })
   });
   const body = await res.text();
-  if (!res.ok) throw new Error(`Email failed: ${res.status} ${body}`);
+  if (!res.ok) return { skipped: true, reason: `Resend rejected email: ${res.status} ${body}` };
   return { sent: true };
 }
 
@@ -68,30 +82,32 @@ export async function onRequestPost({ request, env }) {
   try {
     const data = await request.json();
     data.submittedAt = data.submittedAt || new Date().toISOString();
-    const recordId = crypto.randomUUID();
+    const recordId = data.recordId || recordReference();
+    data.recordId = recordId;
 
-    if (env.DB) {
-      await env.DB.prepare(
-        `INSERT INTO assessments (id, submitted_at, site_name, engineer_name, plant_temp, risk_level, supervisor_notified, data_json)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-      ).bind(
-        recordId,
-        data.submittedAt,
-        data.siteName || '',
-        data.engineerName || '',
-        data.plantTemp || '',
-        data.riskLevel || '',
-        data.supervisorNotified || '',
-        JSON.stringify(data)
-      ).run();
-    }
+    if (!env.DB) return json({ ok: false, error: 'D1 database binding DB is not configured' }, 500);
 
-    let email = { skipped: true, reason: 'Supervisor not notified' };
+    await env.DB.prepare(
+      `INSERT INTO assessments (id, submitted_at, site_name, engineer_name, plant_temp, risk_level, supervisor_notified, data_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      recordId,
+      data.submittedAt,
+      data.siteName || '',
+      data.engineerName || '',
+      data.plantTemp || '',
+      data.riskLevel || '',
+      data.supervisorNotified || '',
+      JSON.stringify(data)
+    ).run();
+
+    let email = { skipped: true, reason: 'Email notification disabled or supervisor not notified' };
     if (String(data.supervisorNotified).toLowerCase() === 'yes') {
-      email = await sendEmail(env, data, recordId);
+      // Email must never block successful form saving.
+      email = await sendEmail(env, data, recordId).catch(err => ({ skipped: true, reason: err.message }));
     }
 
-    return json({ ok: true, id: recordId, email });
+    return json({ ok: true, id: recordId, recordId, email });
   } catch (err) {
     return json({ ok: false, error: err.message }, 500);
   }

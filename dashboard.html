@@ -4,32 +4,48 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>HBS Heat Stress Dashboard</title>
 <style>
-body{font-family:Arial,Helvetica,sans-serif;background:#f2f4f7;margin:0;color:#101828}header{background:#0b3a53;color:#fff;padding:18px}main{max-width:1180px;margin:auto;padding:16px}.card{background:#fff;border:1px solid #d0d5dd;border-radius:12px;padding:14px;margin:12px 0}input,button{padding:10px;border-radius:8px;border:1px solid #d0d5dd}button{background:#0b3a53;color:#fff;font-weight:700;cursor:pointer}table{width:100%;border-collapse:collapse;background:white}th,td{border:1px solid #d0d5dd;padding:8px;text-align:left;font-size:14px;vertical-align:top}th{background:#f9fafb}.toolbar{display:flex;gap:8px;flex-wrap:wrap}.risk{font-weight:bold}.hidden{display:none}pre{white-space:pre-wrap;background:#f9fafb;border:1px solid #d0d5dd;border-radius:8px;padding:10px}.muted{color:#667085}
+:root{--brand:#0b3a53;--line:#d0d5dd;--bg:#f2f4f7;--danger:#b42318;--warn:#b54708;--ok:#027a48}
+body{font-family:Arial,Helvetica,sans-serif;background:var(--bg);margin:0;color:#101828}header{background:var(--brand);color:#fff;padding:18px}main{max-width:1250px;margin:auto;padding:16px}.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;margin:12px 0}input,select,button{padding:10px;border-radius:8px;border:1px solid var(--line)}button{background:var(--brand);color:#fff;font-weight:700;cursor:pointer}button.secondary{background:#e4e7ec;color:#101828}.stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}.stat{border:1px solid var(--line);border-radius:10px;padding:12px;background:#fcfcfd}.stat b{font-size:1.45rem;display:block;margin-top:4px}.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}table{width:100%;border-collapse:collapse;background:white}th,td{border:1px solid var(--line);padding:8px;text-align:left;font-size:14px;vertical-align:top}th{background:#f9fafb}.risk{font-weight:bold}.risk-High,.risk-Very,.risk-Extreme{color:var(--danger)}tr.alert{background:#fff4ed}.hidden{display:none}pre{white-space:pre-wrap;background:#f9fafb;border:1px solid var(--line);border-radius:8px;padding:10px}.muted{color:#667085}.pill{display:inline-block;border-radius:999px;padding:3px 8px;font-weight:700;background:#eef2f6}.pill.high{background:#fef3f2;color:var(--danger)}.pill.med{background:#fffaeb;color:var(--warn)}.pill.low{background:#ecfdf3;color:var(--ok)}@media(max-width:850px){.stats{grid-template-columns:1fr 1fr}.toolbar input,.toolbar select{width:100%}table{font-size:12px}}@media print{header,.noPrint,.toolbar,.stats{display:none!important}.card{box-shadow:none;border:0}body{background:#fff}}
 </style>
 </head>
 <body>
 <header><h1>HBS Heat Stress Risk Assessment Dashboard</h1><p>Manager view for submitted assessments</p></header>
 <main>
-<section class="card">
+<section class="card noPrint">
   <label><b>Manager PIN</b></label><br>
   <input type="password" id="pin" placeholder="Enter manager PIN">
   <button onclick="loadRecords()">Load Records</button>
   <button onclick="exportCsv()">Export CSV</button>
-  <p class="muted">Set the PIN in Cloudflare Pages environment variable: MANAGER_PIN.</p>
+  <button class="secondary" onclick="window.print()">Print Dashboard</button>
+  <p class="muted">Records are loaded from Cloudflare D1. Email notification is optional and is not required for this dashboard to work.</p>
 </section>
-<section class="card">
+<section class="card noPrint">
+  <div class="stats">
+    <div class="stat">Total<b id="statTotal">0</b></div>
+    <div class="stat">Today<b id="statToday">0</b></div>
+    <div class="stat">This Week<b id="statWeek">0</b></div>
+    <div class="stat">High / Very High / Extreme<b id="statHigh">0</b></div>
+    <div class="stat">Supervisor Notified<b id="statSupervisor">0</b></div>
+  </div>
+</section>
+<section class="card noPrint">
   <div class="toolbar">
     <input id="search" placeholder="Search site / engineer / risk" oninput="render()">
+    <select id="riskFilter" onchange="render()"><option value="">All risks</option><option>Low</option><option>Medium</option><option>High</option><option>Very High</option><option>Extreme</option></select>
+    <input type="date" id="fromDate" onchange="render()">
+    <input type="date" id="toDate" onchange="render()">
+    <button class="secondary" onclick="clearFilters()">Clear Filters</button>
     <span id="count" class="muted"></span>
   </div>
 </section>
 <section class="card">
-  <table id="records"><thead><tr><th>Date</th><th>Site</th><th>Engineer</th><th>Temp</th><th>Risk</th><th>Supervisor</th><th>Decision</th><th>View</th></tr></thead><tbody></tbody></table>
+  <table id="records"><thead><tr><th>Reference</th><th>Date</th><th>Site</th><th>Engineer</th><th>Temp</th><th>Risk</th><th>Supervisor</th><th>Decision</th><th class="noPrint">View</th></tr></thead><tbody></tbody></table>
 </section>
-<section class="card hidden" id="detail"><h2>Assessment Detail</h2><button onclick="window.print()">Print / Save PDF</button><pre id="detailText"></pre></section>
+<section class="card hidden" id="detail"><h2>Assessment Detail</h2><button class="noPrint" onclick="window.print()">Print / Save PDF</button> <button class="noPrint secondary" onclick="downloadDetailJson()">Download JSON</button><div id="detailHtml"></div><pre id="detailText" class="hidden"></pre></section>
 </main>
 <script>
-let records=[];
+let records=[];let currentDetail=null;
+function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));}
 async function loadRecords(){
   const pin=document.getElementById('pin').value.trim();
   const res=await fetch('/api/list?pin='+encodeURIComponent(pin));
@@ -37,24 +53,54 @@ async function loadRecords(){
   if(!res.ok||!data.ok){alert(data.error||'Could not load records');return;}
   records=data.records||[];render();
 }
-function render(){
+function riskClass(r){const x=String(r||''); if(['High','Very High','Extreme'].includes(x))return 'high'; if(x==='Medium')return 'med'; if(x==='Low')return 'low'; return '';}
+function isHighRisk(r){return ['High','Very High','Extreme'].includes(String(r.risk_level||''));}
+function getFiltered(){
   const q=document.getElementById('search').value.toLowerCase();
-  const body=document.querySelector('#records tbody');
-  const filtered=records.filter(r=>JSON.stringify(r).toLowerCase().includes(q));
-  document.getElementById('count').textContent=filtered.length+' records';
-  body.innerHTML=filtered.map((r,i)=>`<tr><td>${r.submitted_at||''}</td><td>${r.site_name||''}</td><td>${r.engineer_name||''}</td><td>${r.plant_temp||''}</td><td class="risk">${r.risk_level||''}</td><td>${r.supervisor_notified||''}</td><td>${(r.data&&r.data.decision)||''}</td><td><button onclick="showDetail(${records.indexOf(r)})">Open</button></td></tr>`).join('');
+  const risk=document.getElementById('riskFilter').value;
+  const from=document.getElementById('fromDate').value;
+  const to=document.getElementById('toDate').value;
+  return records.filter(r=>{
+    const text=JSON.stringify(r).toLowerCase();
+    const date=(r.submitted_at||'').slice(0,10);
+    if(q && !text.includes(q)) return false;
+    if(risk && String(r.risk_level)!==risk) return false;
+    if(from && date < from) return false;
+    if(to && date > to) return false;
+    return true;
+  });
 }
-function showDetail(i){
-  const r=records[i];
+function render(){
+  const filtered=getFiltered();
+  document.getElementById('count').textContent=filtered.length+' records shown';
+  updateStats();
+  const body=document.querySelector('#records tbody');
+  body.innerHTML=filtered.map((r)=>`<tr class="${isHighRisk(r)?'alert':''}"><td>${esc(r.id||'')}</td><td>${esc(r.submitted_at||'')}</td><td>${esc(r.site_name||'')}</td><td>${esc(r.engineer_name||'')}</td><td>${esc(r.plant_temp||'')}</td><td><span class="pill ${riskClass(r.risk_level)}">${esc(r.risk_level||'')}</span></td><td>${esc(r.supervisor_notified||'')}</td><td>${esc((r.data&&r.data.decision)||'')}</td><td class="noPrint"><button onclick="showDetail('${esc(r.id)}')">Open</button></td></tr>`).join('');
+}
+function updateStats(){
+  const now=new Date();const today=now.toISOString().slice(0,10);const startWeek=new Date(now);startWeek.setDate(now.getDate()-6);const start=startWeek.toISOString().slice(0,10);
+  document.getElementById('statTotal').textContent=records.length;
+  document.getElementById('statToday').textContent=records.filter(r=>(r.submitted_at||'').slice(0,10)===today).length;
+  document.getElementById('statWeek').textContent=records.filter(r=>(r.submitted_at||'').slice(0,10)>=start).length;
+  document.getElementById('statHigh').textContent=records.filter(isHighRisk).length;
+  document.getElementById('statSupervisor').textContent=records.filter(r=>String(r.supervisor_notified).toLowerCase()==='yes').length;
+}
+function showDetail(id){
+  const r=records.find(x=>String(x.id)===String(id)); currentDetail=r;
+  const d=r.data||{};
   document.getElementById('detail').classList.remove('hidden');
-  document.getElementById('detailText').textContent=JSON.stringify(r.data||r,null,2);
+  document.getElementById('detailHtml').innerHTML=`<h3>Reference: ${esc(r.id)}</h3><table><tr><th>Site</th><td>${esc(d.siteName||r.site_name)}</td><th>Engineer</th><td>${esc(d.engineerName||r.engineer_name)}</td></tr><tr><th>Submitted</th><td>${esc(r.submitted_at)}</td><th>Risk</th><td>${esc(r.risk_level)}</td></tr><tr><th>Plant Temp</th><td>${esc(r.plant_temp)} °C</td><th>Supervisor Notified</th><td>${esc(r.supervisor_notified)}</td></tr><tr><th>Decision</th><td colspan="3">${esc(d.decision)}</td></tr><tr><th>Additional Controls</th><td colspan="3">${esc(d.additionalControls)}</td></tr><tr><th>Break / Welfare Notes</th><td colspan="3">${esc(d.breakWelfareNotes)}</td></tr></table><h3>Full Record</h3>`;
+  document.getElementById('detailText').classList.remove('hidden');
+  document.getElementById('detailText').textContent=JSON.stringify(d||r,null,2);
   document.getElementById('detail').scrollIntoView({behavior:'smooth'});
 }
+function clearFilters(){document.getElementById('search').value='';document.getElementById('riskFilter').value='';document.getElementById('fromDate').value='';document.getElementById('toDate').value='';render();}
 function exportCsv(){
-  const rows=[['Submitted','Site','Engineer','Plant Temp','Risk','Supervisor Notified','Decision']];
-  records.forEach(r=>rows.push([r.submitted_at,r.site_name,r.engineer_name,r.plant_temp,r.risk_level,r.supervisor_notified,(r.data&&r.data.decision)||'']));
+  const rows=[['Reference','Submitted','Site','Engineer','Plant Temp','Risk','Supervisor Notified','Decision','Additional Controls','Break Notes']];
+  getFiltered().forEach(r=>rows.push([r.id,r.submitted_at,r.site_name,r.engineer_name,r.plant_temp,r.risk_level,r.supervisor_notified,(r.data&&r.data.decision)||'',(r.data&&r.data.additionalControls)||'',(r.data&&r.data.breakWelfareNotes)||'']));
   const csv=rows.map(row=>row.map(v=>'"'+String(v??'').replaceAll('"','""')+'"').join(',')).join('\n');
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='hbs-heat-stress-assessments.csv';a.click();URL.revokeObjectURL(a.href);
 }
+function downloadDetailJson(){if(!currentDetail){alert('Open a record first.');return;}const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(currentDetail,null,2)],{type:'application/json'}));a.download=(currentDetail.id||'assessment')+'.json';a.click();URL.revokeObjectURL(a.href);}
 </script>
 </body></html>

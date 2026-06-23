@@ -63,7 +63,9 @@
 <div id="successMessage" class="card hidden" style="border-left:6px solid #027a48">
   <h2>Assessment Submitted Successfully</h2>
   <p><b>Your Heat Stress Risk Assessment has been submitted.</b></p>
-  <p>The record has been saved to the Cloudflare database and email notifications have been processed.</p>
+  <p>The record has been saved to the Cloudflare database.</p>
+  <p><b>Reference:</b> <span id="successRef">Pending</span></p>
+  <p class="notice"><b>Email notification is optional.</b> The dashboard remains the main compliance record.</p>
   <button type="button" class="primary" onclick="window.location.href='/'">Start New Assessment</button>
 </div>
 
@@ -392,9 +394,12 @@ document.getElementById('riskForm').addEventListener('submit', async (event)=>{
     if(!response.ok || !result.ok) throw new Error(result.error || 'Cloudflare submission failed: ' + response.status);
     form.classList.add('hidden');
     const success = document.getElementById('successMessage');
+    const ref = document.getElementById('successRef');
+    if(ref) ref.textContent = result.recordId || result.id || 'Saved';
     success.classList.remove('hidden');
     window.scrollTo({top:0, behavior:'smooth'});
   }catch(error){
+    console.error(error);
     alert('Submission failed. Please use Print / Save PDF or Download JSON as a backup, then contact your supervisor.');
     if(submitButton){
       submitButton.disabled = false;
