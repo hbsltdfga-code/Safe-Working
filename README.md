@@ -1,4 +1,4 @@
-# HBS Heat Stress Risk Assessment v6 - Cloudflare Pages
+# HBS Heat Stress Risk Assessment v6 - Cloudflare Pages.
 
 This version is built for Cloudflare Pages and GitHub upload.
 
