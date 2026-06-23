@@ -1,0 +1,8 @@
+name = "hbs-heat-stress-assessment"
+pages_build_output_dir = "."
+
+# After creating the D1 database in Cloudflare, replace database_id below.
+[[d1_databases]]
+binding = "DB"
+database_name = "hbs_heat_stress"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"

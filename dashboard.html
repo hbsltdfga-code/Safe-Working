@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HBS Heat Stress Dashboard</title>
+<style>
+body{font-family:Arial,Helvetica,sans-serif;background:#f2f4f7;margin:0;color:#101828}header{background:#0b3a53;color:#fff;padding:18px}main{max-width:1180px;margin:auto;padding:16px}.card{background:#fff;border:1px solid #d0d5dd;border-radius:12px;padding:14px;margin:12px 0}input,button{padding:10px;border-radius:8px;border:1px solid #d0d5dd}button{background:#0b3a53;color:#fff;font-weight:700;cursor:pointer}table{width:100%;border-collapse:collapse;background:white}th,td{border:1px solid #d0d5dd;padding:8px;text-align:left;font-size:14px;vertical-align:top}th{background:#f9fafb}.toolbar{display:flex;gap:8px;flex-wrap:wrap}.risk{font-weight:bold}.hidden{display:none}pre{white-space:pre-wrap;background:#f9fafb;border:1px solid #d0d5dd;border-radius:8px;padding:10px}.muted{color:#667085}
+</style>
+</head>
+<body>
+<header><h1>HBS Heat Stress Risk Assessment Dashboard</h1><p>Manager view for submitted assessments</p></header>
+<main>
+<section class="card">
+  <label><b>Manager PIN</b></label><br>
+  <input type="password" id="pin" placeholder="Enter manager PIN">
+  <button onclick="loadRecords()">Load Records</button>
+  <button onclick="exportCsv()">Export CSV</button>
+  <p class="muted">Set the PIN in Cloudflare Pages environment variable: MANAGER_PIN.</p>
+</section>
+<section class="card">
+  <div class="toolbar">
+    <input id="search" placeholder="Search site / engineer / risk" oninput="render()">
+    <span id="count" class="muted"></span>
+  </div>
+</section>
+<section class="card">
+  <table id="records"><thead><tr><th>Date</th><th>Site</th><th>Engineer</th><th>Temp</th><th>Risk</th><th>Supervisor</th><th>Decision</th><th>View</th></tr></thead><tbody></tbody></table>
+</section>
+<section class="card hidden" id="detail"><h2>Assessment Detail</h2><button onclick="window.print()">Print / Save PDF</button><pre id="detailText"></pre></section>
+</main>
+<script>
+let records=[];
+async function loadRecords(){
+  const pin=document.getElementById('pin').value.trim();
+  const res=await fetch('/api/list?pin='+encodeURIComponent(pin));
+  const data=await res.json().catch(()=>({ok:false,error:'Invalid response'}));
+  if(!res.ok||!data.ok){alert(data.error||'Could not load records');return;}
+  records=data.records||[];render();
+}
+function render(){
+  const q=document.getElementById('search').value.toLowerCase();
+  const body=document.querySelector('#records tbody');
+  const filtered=records.filter(r=>JSON.stringify(r).toLowerCase().includes(q));
+  document.getElementById('count').textContent=filtered.length+' records';
+  body.innerHTML=filtered.map((r,i)=>`<tr><td>${r.submitted_at||''}</td><td>${r.site_name||''}</td><td>${r.engineer_name||''}</td><td>${r.plant_temp||''}</td><td class="risk">${r.risk_level||''}</td><td>${r.supervisor_notified||''}</td><td>${(r.data&&r.data.decision)||''}</td><td><button onclick="showDetail(${records.indexOf(r)})">Open</button></td></tr>`).join('');
+}
+function showDetail(i){
+  const r=records[i];
+  document.getElementById('detail').classList.remove('hidden');
+  document.getElementById('detailText').textContent=JSON.stringify(r.data||r,null,2);
+  document.getElementById('detail').scrollIntoView({behavior:'smooth'});
+}
+function exportCsv(){
+  const rows=[['Submitted','Site','Engineer','Plant Temp','Risk','Supervisor Notified','Decision']];
+  records.forEach(r=>rows.push([r.submitted_at,r.site_name,r.engineer_name,r.plant_temp,r.risk_level,r.supervisor_notified,(r.data&&r.data.decision)||'']));
+  const csv=rows.map(row=>row.map(v=>'"'+String(v??'').replaceAll('"','""')+'"').join(',')).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='hbs-heat-stress-assessments.csv';a.click();URL.revokeObjectURL(a.href);
+}
+</script>
+</body></html>

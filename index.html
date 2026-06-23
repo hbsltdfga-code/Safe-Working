@@ -3,8 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>HBS Heat Stress Risk Assessment - Cloudflare Version</title>
+  <title>HBS Heat Stress Risk Assessment v5</title>
   <meta name="theme-color" content="#0b3a53">
+  <link rel="manifest" href="manifest.webmanifest">
   <style>
     :root{
       --brand:#0b3a53; --accent:#f3b23c; --danger:#b42318; --warn:#b54708;
@@ -54,26 +55,26 @@
 </head>
 <body>
 <header>
-  <h1>HBS Ltd – Dynamic Heat Stress Risk Assessment</h1>
-  <p>Plant Rooms, Boiler Houses & High Temperature Work Areas – Hydration Control Version</p>
+  <h1>HBS Ltd – Dynamic Heat Stress Risk Assessment v6</h1>
+  <p>Plant Rooms, Boiler Houses & High Temperature Work Areas – Cloudflare Database & Email Notification Version</p>
 </header>
 
 <main>
 <div id="successMessage" class="card hidden" style="border-left:6px solid #027a48">
   <h2>Assessment Submitted Successfully</h2>
   <p><b>Your Heat Stress Risk Assessment has been submitted.</b></p>
-  <p>The record has been submitted successfully. A local JSON backup can also be downloaded if required.</p>
+  <p>The record has been saved to the Cloudflare database and email notifications have been processed.</p>
   <button type="button" class="primary" onclick="window.location.href='/'">Start New Assessment</button>
 </div>
 
-<form name="heat-stress-risk-assessment" method="POST" action="/api/submit" id="riskForm">
-  <input type="hidden" name="form-name" value="heat-stress-risk-assessment">
+<form name="heat-stress-risk-assessment-v3" method="POST" data-netlify="true" netlify-honeypot="bot-field" action="/" id="riskForm">
+  <input type="hidden" name="form-name" value="heat-stress-risk-assessment-v3">
   <p class="hidden"><label>Do not fill this in: <input name="bot-field"></label></p>
   <input type="hidden" name="riskLevel" id="riskLevelField">
   <input type="hidden" name="riskRecommendation" id="riskRecommendationField">
   <input type="hidden" name="submittedAt" id="submittedAt">
   <input type="hidden" name="notifySupervisorEmails" id="notifyLucy" value="No">
-  <input type="hidden" name="notificationRecipients" value="lucy.coppage@hockley-ltd.com, eward.richards@hockley-ltd.com, pqctkpdxj5@privaterelay.appleid.com">
+  <input type="hidden" name="notificationRecipients" value="lucy.coppage@hockley-ltd.com, eward.richards@hockley-ltd.com, peter.taylor@hockley-ltd.com">
 
   <section class="card">
     <h2>1. Site Details</h2>
@@ -200,7 +201,7 @@
   <section class="card" id="supervisorSection">
     <h2>9. Supervisor Authorisation</h2>
     <small>Required where plant room temperature exceeds 40°C or where symptoms/concerns are present.</small>
-    <div class="notice"><b>Automatic notification rule:</b> if Supervisor Notified is selected as <b>Yes</b>, this submission will include <b>notifySupervisorEmails = Yes</b>. The Cloudflare function is set up to email Lucy, Eward and Peter when a Resend API key is added.</div>
+    <div class="notice"><b>Automatic notification rule:</b> if Supervisor Notified is selected as <b>Yes</b>, the Cloudflare function will email <b>lucy.coppage@hockley-ltd.com, eward.richards@hockley-ltd.com and peter.taylor@hockley-ltd.com</b>.</div>
     <div class="grid">
       <div><label>Supervisor Approval Given</label><select name="supervisorApproval"><option value="">Select</option><option>Yes</option><option>No</option><option>N/A</option></select></div>
       <div><label>Approval Time</label><input type="time" name="approvalTime"></div>
@@ -253,7 +254,8 @@
 </form>
 
 <footer>
-  HBS Ltd Compliance Form v5. This dynamic risk assessment does not replace site-specific RAMS or emergency procedures.
+  <p>HBS Ltd Compliance Form v6. This dynamic risk assessment does not replace site-specific RAMS or emergency procedures.</p>
+  <p><a href="/dashboard.html">Manager Dashboard</a></p>
 </footer>
 </main>
 
@@ -366,7 +368,6 @@ function clearForm(){
   }
 }
 
-
 document.getElementById('riskForm').addEventListener('submit', async (event)=>{
   event.preventDefault();
   submittedAt.value = new Date().toISOString();
@@ -374,39 +375,27 @@ document.getElementById('riskForm').addEventListener('submit', async (event)=>{
   updateNotificationTrigger();
 
   const form = event.target;
-  if(!form.checkValidity()){
-    form.reportValidity();
-    return;
-  }
-
   const submitButton = form.querySelector('button[type="submit"]');
   if(submitButton){
     submitButton.disabled = true;
     submitButton.textContent = 'Submitting...';
   }
 
-  const payload = formDataObject();
-
   try{
+    const formData = new FormData(form);
     const response = await fetch('/api/submit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(Object.fromEntries(formData.entries()))
     });
-
-    const result = await response.json().catch(()=>({}));
-    if(!response.ok || !result.ok){
-      throw new Error(result.error || 'Submission failed');
-    }
-
-    localStorage.removeItem('hbsHeatStressDraftV2');
+    const result = await response.json().catch(() => ({}));
+    if(!response.ok || !result.ok) throw new Error(result.error || 'Cloudflare submission failed: ' + response.status);
     form.classList.add('hidden');
     const success = document.getElementById('successMessage');
     success.classList.remove('hidden');
     window.scrollTo({top:0, behavior:'smooth'});
   }catch(error){
-    console.error(error);
-    alert('Submission failed. Please use Print / Save PDF or Download JSON as a backup. Error: ' + error.message);
+    alert('Submission failed. Please use Print / Save PDF or Download JSON as a backup, then contact your supervisor.');
     if(submitButton){
       submitButton.disabled = false;
       submitButton.textContent = 'Submit Assessment';

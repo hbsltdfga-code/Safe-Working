@@ -1,121 +1,98 @@
+const RECIPIENTS = [
+  'lucy.coppage@hockley-ltd.com',
+  'eward.richards@hockley-ltd.com',
+  'peter.taylor@hockley-ltd.com'
+];
 
-export async function onRequestPost(context) {
-  try {
-    const env = context.env || {};
-    const data = await context.request.json();
-
-    const reference = `HBS-HEAT-${new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}`;
-    data.reference = reference;
-    data.serverReceivedAt = new Date().toISOString();
-
-    // Optional Cloudflare KV storage. Create a KV namespace and bind it as ASSESSMENTS.
-    if (env.ASSESSMENTS) {
-      await env.ASSESSMENTS.put(reference, JSON.stringify(data, null, 2));
-    }
-
-    // Optional email using Resend. Add RESEND_API_KEY and FROM_EMAIL environment variables.
-    const recipients = [
-      'lucy.coppage@hockley-ltd.com',
-      'eward.richards@hockley-ltd.com',
-      'pqctkpdxj5@privaterelay.appleid.com'
-    ];
-
-    let emailSent = false;
-    if (env.RESEND_API_KEY) {
-      const subjectPrefix = data.notifySupervisorEmails === 'Yes' ? 'SUPERVISOR NOTIFIED - ' : '';
-      const subject = `${subjectPrefix}HBS Heat Stress Risk Assessment - ${data.siteName || 'Site'} - ${reference}`;
-      const text = buildEmailText(data);
-
-      const emailResponse = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${env.RESEND_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          from: env.FROM_EMAIL || 'HBS Compliance <onboarding@resend.dev>',
-          to: recipients,
-          subject,
-          text
-        })
-      });
-
-      if (!emailResponse.ok) {
-        const detail = await emailResponse.text();
-        console.error('Resend email failed', detail);
-      } else {
-        emailSent = true;
-      }
-    }
-
-    return json({ ok: true, reference, saved: !!env.ASSESSMENTS, emailSent });
-  } catch (err) {
-    console.error(err);
-    return json({ ok: false, error: err.message || 'Server error' }, 500);
-  }
-}
-
-export async function onRequestGet() {
-  return json({ ok: true, message: 'HBS Heat Stress Risk Assessment API is running.' });
-}
-
-function json(body, status = 200) {
-  return new Response(JSON.stringify(body), {
+function json(data, status = 200) {
+  return new Response(JSON.stringify(data), {
     status,
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      'Cache-Control': 'no-store'
-    }
+    headers: { 'content-type': 'application/json; charset=utf-8' }
   });
 }
 
-function buildEmailText(d) {
-  return `HBS Heat Stress Risk Assessment
+function esc(v) {
+  return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+}
 
-Reference: ${d.reference}
-Submitted: ${d.serverReceivedAt}
+function buildEmailHtml(data, recordId) {
+  const rows = [
+    ['Record ID', recordId],
+    ['Site', data.siteName],
+    ['Address', data.siteAddress],
+    ['Plant room', data.plantRoomLocation],
+    ['Engineer', data.engineerName],
+    ['Engineer email', data.engineerEmail],
+    ['Date', data.assessmentDate],
+    ['Plant room temp', data.plantTemp ? `${data.plantTemp} °C` : ''],
+    ['Risk level', data.riskLevel],
+    ['Recommendation', data.riskRecommendation],
+    ['Decision', data.decision],
+    ['Supervisor notified', data.supervisorNotified],
+    ['Supervisor', data.supervisorName],
+    ['Hydration breaks taken', data.hydrationBreaksTaken],
+    ['Submitted at', data.submittedAt]
+  ];
+  return `<h2>HBS Heat Stress Risk Assessment Submitted</h2>
+  <p>A heat stress risk assessment has been submitted.</p>
+  <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse;font-family:Arial;font-size:14px">
+  ${rows.map(([k,v]) => `<tr><th align="left">${esc(k)}</th><td>${esc(v)}</td></tr>`).join('')}
+  </table>
+  <h3>Additional Controls</h3><p>${esc(data.additionalControls)}</p>
+  <h3>Break / Welfare Notes</h3><p>${esc(data.breakWelfareNotes)}</p>`;
+}
 
-Site: ${d.siteName || ''}
-Address: ${d.siteAddress || ''}
-Plant room: ${d.plantRoomLocation || ''}
-Engineer: ${d.engineerName || ''}
-Engineer email: ${d.engineerEmail || ''}
-Job reference: ${d.jobRef || ''}
+async function sendEmail(env, data, recordId) {
+  if (!env.RESEND_API_KEY) return { skipped: true, reason: 'RESEND_API_KEY not configured' };
+  const subject = `HBS Heat Stress Assessment - ${data.siteName || 'Site'} - ${data.riskLevel || 'Risk'}`;
+  const html = buildEmailHtml(data, recordId);
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'authorization': `Bearer ${env.RESEND_API_KEY}`,
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify({
+      from: env.FROM_EMAIL || 'HBS Compliance <onboarding@resend.dev>',
+      to: RECIPIENTS,
+      subject,
+      html
+    })
+  });
+  const body = await res.text();
+  if (!res.ok) throw new Error(`Email failed: ${res.status} ${body}`);
+  return { sent: true };
+}
 
-Plant room temperature: ${d.plantTemp || ''} °C
-Risk level: ${d.riskLevel || ''}
-Risk recommendation: ${d.riskRecommendation || ''}
-Supervisor notified: ${d.supervisorNotified || ''}
-Supervisor name: ${d.supervisorName || ''}
-Decision: ${d.decision || ''}
+export async function onRequestPost({ request, env }) {
+  try {
+    const data = await request.json();
+    data.submittedAt = data.submittedAt || new Date().toISOString();
+    const recordId = crypto.randomUUID();
 
-Hydration plan:
-Water carried: ${d.waterCarried || ''}
-Water before entry: ${d.waterBeforeEntry || ''}
-Break frequency: ${d.plannedBreakFrequency || ''}
-Cooling area identified: ${d.coolingAreaIdentified || ''}
-Additional water available: ${d.additionalWaterAvailable || ''}
-Welfare check frequency: ${d.welfareCheckFrequency || ''}
+    if (env.DB) {
+      await env.DB.prepare(
+        `INSERT INTO assessments (id, submitted_at, site_name, engineer_name, plant_temp, risk_level, supervisor_notified, data_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      ).bind(
+        recordId,
+        data.submittedAt,
+        data.siteName || '',
+        data.engineerName || '',
+        data.plantTemp || '',
+        data.riskLevel || '',
+        data.supervisorNotified || '',
+        JSON.stringify(data)
+      ).run();
+    }
 
-Additional controls:
-${d.additionalControls || ''}
+    let email = { skipped: true, reason: 'Supervisor not notified' };
+    if (String(data.supervisorNotified).toLowerCase() === 'yes') {
+      email = await sendEmail(env, data, recordId);
+    }
 
-Completion:
-Work completed: ${d.workCompleted || ''}
-Time finished: ${d.timeFinished || ''}
-Max temperature: ${d.maxTemp || ''}
-Hydration breaks taken: ${d.hydrationBreaksTaken || ''}
-Water consumed: ${d.waterConsumedDuringWork || ''}
-Incident reported: ${d.incidentReported || ''}
-Follow-up required: ${d.followUpRequired || ''}
-
-Break / welfare notes:
-${d.breakWelfareNotes || ''}
-
-Supervisor comments:
-${d.supervisorComments || ''}
-
-Engineer declaration/signature:
-${d.engineerSignature || ''}
-`;
+    return json({ ok: true, id: recordId, email });
+  } catch (err) {
+    return json({ ok: false, error: err.message }, 500);
+  }
 }
