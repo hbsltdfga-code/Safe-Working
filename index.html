@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>HBS Heat Stress Risk Assessment - Cloudflare Version</title>
+  <meta name="theme-color" content="#0b3a53">
+  <style>
+    :root{
+      --brand:#0b3a53; --accent:#f3b23c; --danger:#b42318; --warn:#b54708;
+      --ok:#027a48; --muted:#667085; --bg:#f2f4f7; --card:#fff; --line:#d0d5dd;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:#101828}
+    header{background:linear-gradient(135deg,var(--brand),#145b78);color:white;padding:20px 16px}
+    header h1{margin:0;font-size:1.35rem}
+    header p{margin:.35rem 0 0;opacity:.9}
+    main{max-width:980px;margin:0 auto;padding:16px}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin:14px 0;box-shadow:0 2px 8px rgba(16,24,40,.05)}
+    h2{font-size:1.05rem;margin:0 0 12px;color:var(--brand);border-bottom:2px solid #e4e7ec;padding-bottom:8px}
+    label{display:block;font-weight:700;margin:10px 0 5px}
+    input,select,textarea{width:100%;padding:11px;border:1px solid var(--line);border-radius:9px;font-size:1rem;background:white}
+    textarea{min-height:86px}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+    .grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+    .checkgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+    .check{display:flex;gap:8px;align-items:flex-start;border:1px solid #eaecf0;border-radius:9px;padding:9px;background:#fcfcfd;font-weight:600}
+    .check input{width:auto;margin-top:2px}
+    .riskBox{border-radius:12px;padding:14px;font-weight:800;text-align:center;border:2px solid var(--line);font-size:1.1rem;margin-top:14px}
+    .risk-low{background:#ecfdf3;color:#027a48;border-color:#abefc6}
+    .risk-med{background:#fffaeb;color:#b54708;border-color:#fedf89}
+    .risk-high{background:#fff4ed;color:#b93815;border-color:#fdb022}
+    .risk-vhigh{background:#fef3f2;color:#b42318;border-color:#fecdca}
+    .risk-extreme{background:#7a271a;color:white;border-color:#7a271a}
+    .notice{background:#fffaeb;border-left:5px solid var(--accent);padding:12px;border-radius:8px;margin:10px 0}
+    .stop{background:#fef3f2;border-left:5px solid var(--danger);padding:12px;border-radius:8px;margin:10px 0;font-weight:700}
+    .actions{display:flex;flex-wrap:wrap;gap:10px;position:sticky;bottom:0;background:rgba(242,244,247,.95);padding:12px 0}
+    button{border:0;border-radius:10px;padding:12px 15px;font-weight:800;cursor:pointer}
+    .primary{background:var(--brand);color:white}
+    .secondary{background:#e4e7ec;color:#101828}
+    .danger{background:var(--danger);color:white}
+    table{width:100%;border-collapse:collapse;font-size:.95rem}
+    th,td{border:1px solid var(--line);padding:8px;text-align:left}
+    th{background:#f9fafb}
+    small{color:var(--muted)}
+    .hidden{display:none}
+    footer{font-size:.82rem;color:var(--muted);text-align:center;padding:20px}
+    @media(max-width:720px){.grid,.grid3,.checkgrid{grid-template-columns:1fr}.actions{position:static}}
+    @media print{
+      body{background:white}.actions,.noPrint{display:none!important}main{max-width:none;padding:0}.card{break-inside:avoid;box-shadow:none}
+      header{color:#000;background:white;border-bottom:2px solid #000}
+    }
+  </style>
+</head>
+<body>
+<header>
+  <h1>HBS Ltd – Dynamic Heat Stress Risk Assessment</h1>
+  <p>Plant Rooms, Boiler Houses & High Temperature Work Areas – Hydration Control Version</p>
+</header>
+
+<main>
+<div id="successMessage" class="card hidden" style="border-left:6px solid #027a48">
+  <h2>Assessment Submitted Successfully</h2>
+  <p><b>Your Heat Stress Risk Assessment has been submitted.</b></p>
+  <p>The record has been submitted successfully. A local JSON backup can also be downloaded if required.</p>
+  <button type="button" class="primary" onclick="window.location.href='/'">Start New Assessment</button>
+</div>
+
+<form name="heat-stress-risk-assessment" method="POST" action="/api/submit" id="riskForm">
+  <input type="hidden" name="form-name" value="heat-stress-risk-assessment">
+  <p class="hidden"><label>Do not fill this in: <input name="bot-field"></label></p>
+  <input type="hidden" name="riskLevel" id="riskLevelField">
+  <input type="hidden" name="riskRecommendation" id="riskRecommendationField">
+  <input type="hidden" name="submittedAt" id="submittedAt">
+  <input type="hidden" name="notifySupervisorEmails" id="notifyLucy" value="No">
+  <input type="hidden" name="notificationRecipients" value="lucy.coppage@hockley-ltd.com, eward.richards@hockley-ltd.com, pqctkpdxj5@privaterelay.appleid.com">
+
+  <section class="card">
+    <h2>1. Site Details</h2>
+    <div class="grid">
+      <div><label>Site Name *</label><input name="siteName" required></div>
+      <div><label>Job / Call Reference</label><input name="jobRef"></div>
+      <div><label>Site Address *</label><input name="siteAddress" required></div>
+      <div><label>Plant Room Location *</label><input name="plantRoomLocation" required></div>
+      <div><label>Engineer Name *</label><input name="engineerName" required></div>
+      <div><label>Engineer Email</label><input type="email" name="engineerEmail"></div>
+      <div><label>Date *</label><input type="date" name="assessmentDate" id="assessmentDate" required></div>
+      <div><label>Time Started *</label><input type="time" name="timeStarted" required></div>
+      <div><label>Supervisor Notified *</label><select name="supervisorNotified" required><option value="">Select</option><option>Yes</option><option>No</option></select></div>
+      <div><label>Supervisor Name</label><input name="supervisorName"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>2. Environmental Conditions</h2>
+    <div class="grid3">
+      <div><label>Outside Temperature °C</label><input type="number" step="0.1" name="outsideTemp"></div>
+      <div><label>Plant Room Temperature °C *</label><input type="number" step="0.1" name="plantTemp" id="plantTemp" required></div>
+      <div><label>Humidity %</label><input type="number" step="1" min="0" max="100" name="humidity"></div>
+      <div><label>Ventilation Present *</label><select name="ventilationPresent" required><option value="">Select</option><option>Yes</option><option>No</option></select></div>
+      <div><label>Mechanical Ventilation Operating *</label><select name="mechVentOperating" required><option value="">Select</option><option>Yes</option><option>No</option><option>N/A</option></select></div>
+      <div><label>Boilers Operating *</label><select name="boilersOperating" required><option value="">Select</option><option>Yes</option><option>No</option></select></div>
+      <div><label>Number of Boilers Running</label><input type="number" min="0" name="boilersRunning"></div>
+      <div><label>Estimated Work Duration</label><input name="estimatedDuration" placeholder="e.g. 45 minutes"></div>
+      <div><label>Working Alone?</label><select name="workingAlone"><option>Yes</option><option>No</option></select></div>
+    </div>
+    <div id="riskBox" class="riskBox">Enter plant room temperature to calculate risk</div>
+    <div id="riskAdvice" class="notice">Temperature hydration controls will appear here.</div>
+  </section>
+
+  <section class="card">
+    <h2>3. Hydration Plan</h2>
+    <div class="grid3">
+      <div><label>Water Carried by Engineer *</label><select name="waterCarried" required><option value="">Select</option><option>Less than 1 litre</option><option>1 litre</option><option>2 litres or more</option></select></div>
+      <div><label>Water Consumed Before Entry *</label><select name="waterBeforeEntry" required><option value="">Select</option><option>Less than 250ml</option><option>250ml</option><option>500ml or more</option></select></div>
+      <div><label>Planned Hydration Break Frequency *</label><select name="plannedBreakFrequency" required><option value="">Select</option><option>Every 60 minutes</option><option>Every 45 minutes</option><option>Every 30 minutes</option><option>More frequent than every 30 minutes</option></select></div>
+      <div><label>Cooling Area Identified *</label><select name="coolingAreaIdentified" required><option value="">Select</option><option>Yes</option><option>No</option></select></div>
+      <div><label>Additional Water Available On Site *</label><select name="additionalWaterAvailable" required><option value="">Select</option><option>Yes</option><option>No</option></select></div>
+      <div><label>Welfare Check Frequency</label><input name="welfareCheckFrequency" placeholder="e.g. every 30 minutes"></div>
+    </div>
+    <div class="notice"><b>Company expectation:</b> engineers must take frequent hydration breaks and record breaks taken. Breaks should be increased as temperature rises or physical work increases.</div>
+  </section>
+
+  <section class="card">
+    <h2>4. Engineer Fitness Check</h2>
+    <div class="checkgrid">
+      <label class="check"><input type="checkbox" name="hydrated"> I have consumed sufficient water today.</label>
+      <label class="check"><input type="checkbox" name="fitWell"> I am feeling fit and well.</label>
+      <label class="check"><input type="checkbox" name="noAlcohol"> I have not consumed alcohol within the last 12 hours.</label>
+      <label class="check"><input type="checkbox" name="medicationChecked"> Medication / health issues that may affect heat tolerance have been considered.</label>
+      <label class="check"><input type="checkbox" name="previousHeatExhaustion"> I have previously experienced heat exhaustion.</label>
+      <label class="check"><input type="checkbox" name="supervisorContactAvailable"> Supervisor / emergency contact available.</label>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>5. Work Activity</h2>
+    <div class="checkgrid">
+      <label class="check"><input type="checkbox" name="activity" value="Visual inspection"> Visual inspection only</label>
+      <label class="check"><input type="checkbox" name="activity" value="Service work"> Service work</label>
+      <label class="check"><input type="checkbox" name="activity" value="Combustion testing"> Combustion testing</label>
+      <label class="check"><input type="checkbox" name="activity" value="Gas tightness testing"> Gas tightness testing</label>
+      <label class="check"><input type="checkbox" name="activity" value="Burner repairs"> Burner repairs</label>
+      <label class="check"><input type="checkbox" name="activity" value="Pipework repairs"> Pipework repairs</label>
+      <label class="check"><input type="checkbox" name="activity" value="Heavy lifting"> Heavy lifting</label>
+      <label class="check"><input type="checkbox" name="activity" value="Other"> Other</label>
+    </div>
+    <label>Work Details</label><textarea name="workDetails"></textarea>
+  </section>
+
+  <section class="card">
+    <h2>6. Control Measures Implemented</h2>
+    <div class="checkgrid">
+      <label class="check"><input type="checkbox" name="controls" value="Water available"> Cool drinking water available</label>
+      <label class="check"><input type="checkbox" name="controls" value="500ml before entry"> Minimum 500ml consumed before entering plant room</label>
+      <label class="check"><input type="checkbox" name="controls" value="2 litres carried"> Engineer carrying minimum 2 litres drinking water</label>
+      <label class="check"><input type="checkbox" name="controls" value="Hydration breaks 30-60 mins"> Hydration breaks every 30–60 minutes</label>
+      <label class="check"><input type="checkbox" name="controls" value="Electrolytes"> Electrolyte replacement available where required</label>
+      <label class="check"><input type="checkbox" name="controls" value="Cooling area"> Cooling/rest area identified</label>
+      <label class="check"><input type="checkbox" name="controls" value="Doors opened"> Doors opened where safe</label>
+      <label class="check"><input type="checkbox" name="controls" value="Mechanical ventilation"> Mechanical ventilation operating where available</label>
+      <label class="check"><input type="checkbox" name="controls" value="Portable fan"> Portable fan / air movement provided where safe</label>
+      <label class="check"><input type="checkbox" name="controls" value="Exposure managed"> Exposure periods managed with hydration breaks</label>
+      <label class="check"><input type="checkbox" name="controls" value="Welfare checks"> Welfare checks arranged</label>
+      <label class="check"><input type="checkbox" name="controls" value="Supervisor informed"> Supervisor informed of elevated temperature</label>
+      <label class="check"><input type="checkbox" name="controls" value="Additional engineer"> Additional engineer support considered where practical</label>
+      <label class="check"><input type="checkbox" name="controls" value="Task rotation"> Task rotation considered where practical</label>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>7. Heat Exposure Monitoring</h2>
+    <div class="stop">If any heat stress symptoms are present: STOP WORK, leave the plant room, notify supervisor, hydrate and move to a cool area. Fitness must be reassessed before returning to work.</div>
+    <div class="checkgrid">
+      <label class="check"><input type="checkbox" class="symptom" name="symptoms" value="Excessive sweating"> Excessive sweating</label>
+      <label class="check"><input type="checkbox" class="symptom" name="symptoms" value="Headache"> Headache</label>
+      <label class="check"><input type="checkbox" class="symptom" name="symptoms" value="Dizziness"> Dizziness</label>
+      <label class="check"><input type="checkbox" class="symptom" name="symptoms" value="Nausea"> Nausea</label>
+      <label class="check"><input type="checkbox" class="symptom" name="symptoms" value="Muscle cramps"> Muscle cramps</label>
+      <label class="check"><input type="checkbox" class="symptom" name="symptoms" value="Fatigue"> Fatigue</label>
+      <label class="check"><input type="checkbox" class="symptom" name="symptoms" value="Confusion"> Confusion</label>
+      <label class="check"><input type="checkbox" class="symptom" name="symptoms" value="Fainting sensation"> Fainting sensation</label>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>8. Assessment Outcome</h2>
+    <label>Decision *</label>
+    <select name="decision" id="decision" required>
+      <option value="">Select decision</option>
+      <option>Safe to Proceed</option>
+      <option>Proceed with Hydration Controls</option>
+      <option>Supervisor Approval Required</option>
+      <option>Stop Work Due to Heat Stress Symptoms</option>
+    </select>
+    <label>Additional Hydration / Welfare Controls *</label>
+    <textarea name="additionalControls" required placeholder="Record hydration break plan, water available, welfare checks, ventilation controls and supervisor instructions."></textarea>
+  </section>
+
+  <section class="card" id="supervisorSection">
+    <h2>9. Supervisor Authorisation</h2>
+    <small>Required where plant room temperature exceeds 40°C or where symptoms/concerns are present.</small>
+    <div class="notice"><b>Automatic notification rule:</b> if Supervisor Notified is selected as <b>Yes</b>, this submission will include <b>notifySupervisorEmails = Yes</b>. The Cloudflare function is set up to email Lucy, Eward and Peter when a Resend API key is added.</div>
+    <div class="grid">
+      <div><label>Supervisor Approval Given</label><select name="supervisorApproval"><option value="">Select</option><option>Yes</option><option>No</option><option>N/A</option></select></div>
+      <div><label>Approval Time</label><input type="time" name="approvalTime"></div>
+    </div>
+    <label>Supervisor Comments</label><textarea name="supervisorComments"></textarea>
+  </section>
+
+  <section class="card">
+    <h2>10. Completion Record</h2>
+    <div class="grid">
+      <div><label>Work Completed?</label><select name="workCompleted"><option>Yes</option><option>No</option><option>Part Completed</option></select></div>
+      <div><label>Time Finished</label><input type="time" name="timeFinished"></div>
+      <div><label>Maximum Temperature Recorded °C</label><input type="number" step="0.1" name="maxTemp"></div>
+      <div><label>Number of Hydration Breaks Taken *</label><input type="number" min="0" name="hydrationBreaksTaken" required></div>
+      <div><label>Total Water Consumed During Attendance</label><input name="waterConsumedDuringWork" placeholder="e.g. 1.5 litres"></div>
+      <div><label>Longest Exposure Period Without Break</label><input name="longestExposure" placeholder="e.g. 35 minutes"></div>
+      <div><label>Incident Reported?</label><select name="incidentReported"><option>No</option><option>Yes</option></select></div>
+      <div><label>Follow-up Required?</label><select name="followUpRequired"><option>No</option><option>Yes</option></select></div>
+    </div>
+    <label>Break / Welfare Notes</label><textarea name="breakWelfareNotes" placeholder="Record hydration breaks, cooling periods, welfare checks, and any changes in engineer condition."></textarea>
+    <label>Engineer Declaration *</label>
+    <select name="engineerDeclaration" required>
+      <option value="">Select</option>
+      <option>I confirm this assessment has been completed and hydration/welfare controls were implemented before and during work.</option>
+    </select>
+    <label>Engineer Signature / Typed Name *</label><input name="engineerSignature" required>
+  </section>
+
+  <section class="card">
+    <h2>Temperature Trigger Guidance v2</h2>
+    <table>
+      <tr><th>Plant Room Temperature</th><th>Required Action</th></tr>
+      <tr><td>Below 30°C</td><td>Normal working. Maintain hydration.</td></tr>
+      <tr><td>30–35°C</td><td>Increase water intake. Minimum 5-minute hydration break every hour.</td></tr>
+      <tr><td>35–40°C</td><td>Dynamic risk assessment mandatory. Minimum 10-minute hydration break every hour. Supervisor informed.</td></tr>
+      <tr><td>40–45°C</td><td>Dynamic risk assessment mandatory. Hydration break every 30–45 minutes. Welfare checks required. Supervisor notification required.</td></tr>
+      <tr><td>Above 45°C</td><td>Supervisor authorisation required. Strict hydration regime, enhanced welfare monitoring and review of work methods to reduce heat exposure.</td></tr>
+      <tr><td>Any symptoms</td><td>Stop work immediately, move to a cool area, hydrate, notify supervisor and reassess fitness before returning to work.</td></tr>
+    </table>
+  </section>
+
+  <div class="actions">
+    <button type="submit" class="primary">Submit Assessment</button>
+    <button type="button" class="secondary" onclick="saveLocal()">Save Draft on Device</button>
+    <button type="button" class="secondary" onclick="loadLocal()">Load Draft</button>
+    <button type="button" class="secondary" onclick="downloadJSON()">Download JSON Record</button>
+    <button type="button" class="secondary" onclick="window.print()">Print / Save PDF</button>
+    <button type="button" class="danger" onclick="clearForm()">Clear Form</button>
+  </div>
+</form>
+
+<footer>
+  HBS Ltd Compliance Form v5. This dynamic risk assessment does not replace site-specific RAMS or emergency procedures.
+</footer>
+</main>
+
+<script>
+const plantTemp = document.getElementById('plantTemp');
+const riskBox = document.getElementById('riskBox');
+const riskAdvice = document.getElementById('riskAdvice');
+const riskLevelField = document.getElementById('riskLevelField');
+const riskRecommendationField = document.getElementById('riskRecommendationField');
+const submittedAt = document.getElementById('submittedAt');
+const decision = document.getElementById('decision');
+
+document.getElementById('assessmentDate').valueAsDate = new Date();
+
+
+function updateNotificationTrigger(){
+  const supervisorField = document.querySelector('[name="supervisorNotified"]');
+  const notifyLucy = document.getElementById('notifyLucy');
+  if(!supervisorField || !notifyLucy) return;
+  notifyLucy.value = supervisorField.value === 'Yes' ? 'Yes' : 'No';
+}
+
+function classifyRisk(temp){
+  if(isNaN(temp)) return ['Not assessed','Enter plant room temperature to calculate hydration controls.','riskBox'];
+  if(temp < 30) return ['Low','Normal working. Maintain hydration and monitor conditions.','risk-low'];
+  if(temp < 35) return ['Medium','Increase water intake. Minimum 5-minute hydration break every hour.','risk-med'];
+  if(temp < 40) return ['High','Dynamic risk assessment mandatory. Minimum 10-minute hydration break every hour. Supervisor informed.','risk-high'];
+  if(temp <= 45) return ['Very High','Hydration break every 30–45 minutes. Welfare checks and supervisor notification required.','risk-vhigh'];
+  return ['Extreme','Supervisor authorisation required. Strict hydration regime, enhanced welfare monitoring and review of work methods to reduce heat exposure.','risk-extreme'];
+}
+
+function updateRisk(){
+  const t = parseFloat(plantTemp.value);
+  const [level, advice, css] = classifyRisk(t);
+  riskBox.className = 'riskBox ' + css;
+  riskBox.textContent = 'Risk Level: ' + level;
+  riskAdvice.textContent = advice;
+  riskLevelField.value = level;
+  riskRecommendationField.value = advice;
+
+  if(level === 'High' && !decision.value) decision.value = 'Proceed with Hydration Controls';
+  if(level === 'Very High' && !decision.value) decision.value = 'Supervisor Approval Required';
+  if(level === 'Extreme' && !decision.value) decision.value = 'Supervisor Approval Required';
+}
+
+plantTemp.addEventListener('input', updateRisk);
+document.querySelectorAll('.symptom').forEach(cb=>cb.addEventListener('change', ()=>{
+  const any = [...document.querySelectorAll('.symptom')].some(x=>x.checked);
+  if(any){
+    decision.value = 'Stop Work Due to Heat Stress Symptoms';
+    riskAdvice.textContent = 'Heat stress symptom recorded. STOP WORK immediately, notify supervisor, hydrate and move to a cool area. Reassess fitness before returning.';
+    riskRecommendationField.value = riskAdvice.textContent;
+  } else updateRisk();
+}));
+
+function formDataObject(){
+  submittedAt.value = new Date().toISOString();
+  updateRisk();
+  updateNotificationTrigger();
+  const data = new FormData(document.getElementById('riskForm'));
+  const obj = {};
+  for(const [k,v] of data.entries()){
+    if(obj[k]){
+      if(!Array.isArray(obj[k])) obj[k]=[obj[k]];
+      obj[k].push(v);
+    } else obj[k]=v;
+  }
+  return obj;
+}
+
+function saveLocal(){
+  localStorage.setItem('hbsHeatStressDraftV2', JSON.stringify(formDataObject()));
+  alert('Draft saved on this device.');
+}
+
+function loadLocal(){
+  const raw = localStorage.getItem('hbsHeatStressDraftV2');
+  if(!raw){ alert('No draft found on this device.'); return; }
+  const obj = JSON.parse(raw);
+  const form = document.getElementById('riskForm');
+  Object.entries(obj).forEach(([k,v])=>{
+    const fields = form.querySelectorAll(`[name="${CSS.escape(k)}"]`);
+    fields.forEach(f=>{
+      if(f.type === 'checkbox'){
+        f.checked = Array.isArray(v) ? v.includes(f.value) || v.includes('on') : (v === f.value || v === 'on');
+      } else if(!Array.isArray(v)) f.value = v;
+    });
+  });
+  updateRisk();
+  alert('Draft loaded.');
+}
+
+function downloadJSON(){
+  const obj = formDataObject();
+  const name = `HBS_Heat_Stress_v2_${(obj.siteName||'Site').replace(/[^a-z0-9]/gi,'_')}_${obj.assessmentDate||'date'}.json`;
+  const blob = new Blob([JSON.stringify(obj,null,2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function clearForm(){
+  if(confirm('Clear this form?')){
+    document.getElementById('riskForm').reset();
+    document.getElementById('assessmentDate').valueAsDate = new Date();
+    localStorage.removeItem('hbsHeatStressDraftV2');
+    updateRisk();
+  }
+}
+
+
+document.getElementById('riskForm').addEventListener('submit', async (event)=>{
+  event.preventDefault();
+  submittedAt.value = new Date().toISOString();
+  updateRisk();
+  updateNotificationTrigger();
+
+  const form = event.target;
+  if(!form.checkValidity()){
+    form.reportValidity();
+    return;
+  }
+
+  const submitButton = form.querySelector('button[type="submit"]');
+  if(submitButton){
+    submitButton.disabled = true;
+    submitButton.textContent = 'Submitting...';
+  }
+
+  const payload = formDataObject();
+
+  try{
+    const response = await fetch('/api/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const result = await response.json().catch(()=>({}));
+    if(!response.ok || !result.ok){
+      throw new Error(result.error || 'Submission failed');
+    }
+
+    localStorage.removeItem('hbsHeatStressDraftV2');
+    form.classList.add('hidden');
+    const success = document.getElementById('successMessage');
+    success.classList.remove('hidden');
+    window.scrollTo({top:0, behavior:'smooth'});
+  }catch(error){
+    console.error(error);
+    alert('Submission failed. Please use Print / Save PDF or Download JSON as a backup. Error: ' + error.message);
+    if(submitButton){
+      submitButton.disabled = false;
+      submitButton.textContent = 'Submit Assessment';
+    }
+  }
+});
+
+document.querySelector('[name="supervisorNotified"]').addEventListener('change', updateNotificationTrigger);
+updateRisk();
+updateNotificationTrigger();
+
+</script>
+</body>
+</html>
